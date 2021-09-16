@@ -49,6 +49,7 @@ def train_estimator_via_grid(X, y):
     print(f'best params: {grid.best_params_}')
     return grid.best_estimator_, X_test, y_test
 
+
 def display_estimator_result(X_train, y_train, C=0.01):
     model = Pipeline([('data_transformer', MinMaxScaler()),
                       ('estimator', LogisticRegression(C=C, fit_intercept=False))])
@@ -56,3 +57,48 @@ def display_estimator_result(X_train, y_train, C=0.01):
     plot_learning_curves(model, X_train, y_train)
     print(cv_result['test_score'])
     return model.fit(X_train, y_train)
+
+
+def plot_model_accuracy_against_probability(model, X_test, y_test):
+    prob = pd.DataFrame(model.predict_proba(X_test))
+    pred_true = (y_test == np.argmax(prob.to_numpy(), axis=1))
+    sure = (prob[0] - 0.5).abs()
+    sure_true_df = pd.DataFrame({'prediction_true': pred_true,
+                  'sure': sure})
+    fig, axis = plt.subplots(1, 2, figsize=(14, 5))
+    palette = sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True)
+    sns.histplot(x='sure', hue='prediction_true',
+                 data=sure_true_df, ax=axis[0],
+                 palette=palette, bins=10,
+                 multiple='stack')
+
+    sns.kdeplot(
+        data=sure_true_df,
+        x="sure", hue="prediction_true",
+        multiple="fill", clip=(0, sure_true_df['sure'].max()),
+        ax = axis[1], palette=palette
+    )
+
+class plot_model_pred_accuracy:
+    def __call__(self, model, X_test, y_test):
+        prob = pd.DataFrame(model.predict_proba(X_test))
+        prob['prediction_true'] = y_test == np.argmax(prob.to_numpy(), axis=1)
+
+        results = []
+        for low in np.linspace(0, 0.4, 5):
+            low = round(low, 1)
+            up = round(low + 0.1, 1)
+            err = np.round(self.find_error_in_prob_range(prob, low, up), 3)
+            results.append([low, up, *err])
+        return pd.DataFrame(results)
+
+    @staticmethod
+    def find_error_in_prob_range(df, low, up):
+        deviation = np.abs(df.iloc[:, 0] - 0.5)
+        delta_deviation_mask = ((low < deviation) &
+                                (up > deviation))
+        mask_size = np.sum(delta_deviation_mask)
+        prediction_results = df.loc[delta_deviation_mask, 'prediction_true']
+        return np.sum(prediction_results) / mask_size, mask_size
+
+

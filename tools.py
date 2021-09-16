@@ -24,13 +24,16 @@ def get_coefs_of_regression(regression, df):
     return pd.Series(np.ravel(regression.coef_), index=df.columns.values)
 
 
-def plot_learning_curves(model, X, y):
+def plot_learning_curves(model, X, y, ax=None):
+    if ax is None:
+        ax = plt.gca()
+
     N, train_lc, val_lc = learning_curve(model,
                                          X, y, cv=3,
                                          train_sizes=np.linspace(0.1, 1, 20))
-    plt.plot(N, np.mean(train_lc, 1), color='blue', label='training score')
-    plt.plot(N, np.mean(val_lc, 1), color='red', label='validation score')
-    plt.legend()
+    ax.plot(N, np.mean(train_lc, 1), color='blue', label='training score')
+    ax.plot(N, np.mean(val_lc, 1), color='red', label='validation score')
+    ax.legend()
     
 
 def train_estimator_via_grid(X, y):

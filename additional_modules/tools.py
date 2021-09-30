@@ -13,15 +13,16 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import cross_validate, LeaveOneOut
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import learning_curve
-# constants
-import consts
+
 
 def drop_df_columns(df, columns):
     return  df.drop(labels=columns, axis=1, inplace=False).to_numpy()
 
 
 def get_coefs_of_regression(regression, df):
-    return pd.Series(np.ravel(regression.coef_), index=df.columns.values)
+    coeffs = dict(zip(df.columns.values, np.ravel(regression.coef_)))
+    coeffs['intercept'] = regression.intercept_[0]
+    return pd.Series(coeffs)
 
 
 def plot_learning_curves(model, X, y, ax=None):
@@ -36,21 +37,6 @@ def plot_learning_curves(model, X, y, ax=None):
     ax.legend()
     
 
-def train_estimator_via_grid(X, y):
-    """
-    Train estimator.
-    Print: score, best parameters.
-    Plot: learning curves
-    :return: best pipeline, X test, y test
-    """
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-    pipeline = Pipeline([('data_transformer', MinMaxScaler()), ('estimator', LogisticRegression())])
-    grid = GridSearchCV(pipeline, consts.grid_parameters, cv=5)
-    grid.fit(X_train, y_train)
-    plot_learning_curves(grid.best_estimator_, X, y)
-    print(f'score: {grid.score(X_test, y_test)}')
-    print(f'best params: {grid.best_params_}')
-    return grid.best_estimator_, X_test, y_test
 
 
 def display_estimator_result(X_train, y_train, C=0.01):
@@ -82,26 +68,57 @@ def plot_model_accuracy_against_probability(model, X_test, y_test):
         ax = axis[1], palette=palette
     )
 
-class plot_model_pred_accuracy:
-    def __call__(self, model, X_test, y_test):
-        prob = pd.DataFrame(model.predict_proba(X_test))
-        prob['prediction_true'] = y_test == np.argmax(prob.to_numpy(), axis=1)
 
-        results = []
-        for low in np.linspace(0, 0.4, 5):
-            low = round(low, 1)
-            up = round(low + 0.1, 1)
-            err = np.round(self.find_error_in_prob_range(prob, low, up), 3)
-            results.append([low, up, *err])
-        return pd.DataFrame(results)
+def grid_search_learning_curves(generate_model, X, y,
+                                grid_param1, grid_param2,
+                                param1_name, param2_name):
+    'let rows - parameter 1, column - parameter 2'
+    # if input values is not in numpy format
+    grid_param1 = np.array(grid_param1)
+    grid_param2 = np.array(grid_param2)
+    # creating subplots
+    ax_rows = grid_param1.size
+    ax_columns = grid_param2.size
+    fig, axes = plt.subplots(ax_rows, ax_columns,
+                             figsize=(5*ax_columns, 4*ax_rows))
+    # plot work
+    for param1_ind, param1_val in enumerate(grid_param1):
+        for param2_ind, param2_val in enumerate(grid_param2):
+            model = generate_model(param1_val, param2_val)
+            ax = axes[param1_ind, param2_ind]
+            plot_learning_curves(model, X, y, ax=ax)
+    # adding labels for x/y
+    for ax, param_val in zip(axes[:,0], grid_param1):
+        ylabel = f'{param1_name}={param_val}'
+        ax.set_ylabel(ylabel, rotation=0)
 
-    @staticmethod
-    def find_error_in_prob_range(df, low, up):
-        deviation = np.abs(df.iloc[:, 0] - 0.5)
-        delta_deviation_mask = ((low < deviation) &
-                                (up > deviation))
-        mask_size = np.sum(delta_deviation_mask)
-        prediction_results = df.loc[delta_deviation_mask, 'prediction_true']
-        return np.sum(prediction_results) / mask_size, mask_size
+    for ax, param_val in zip(axes[0], grid_param2):
+        title = f'{param2_name}={param_val}'
+        ax.set_title(title)
+
+    fig.tight_layout()
+    plt.show()
+
+# class plot_model_pred_accuracy:
+#     def __call__(self, model, X_test, y_test):
+#         prob = pd.DataFrame(model.predict_proba(X_test))
+#         prob['prediction_true'] = y_test == np.argmax(prob.to_numpy(), axis=1)
+#
+#         results = []
+#         for low in np.linspace(0, 0.4, 5):
+#             low = round(low, 1)
+#             up = round(low + 0.1, 1)
+#             err = np.round(self.find_error_in_prob_range(prob, low, up), 3)
+#             results.append([low, up, *err])
+#         return pd.DataFrame(results)
+#
+#     @staticmethod
+#     def find_error_in_prob_range(df, low, up):
+#         deviation = np.abs(df.iloc[:, 0] - 0.5)
+#         delta_deviation_mask = ((low < deviation) &
+#                                 (up > deviation))
+#         mask_size = np.sum(delta_deviation_mask)
+#         prediction_results = df.loc[delta_deviation_mask, 'prediction_true']
+#         return np.sum(prediction_results) / mask_size, mask_size
 
 
